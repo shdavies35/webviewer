@@ -47,17 +47,23 @@
   var settings = null;
   var warnTimer = null;
 
+  function isLocal(v) {
+    return /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(v);
+  }
+
   function normalise(v) {
     v = (v || "").trim();
     if (!v) return "";
-    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+    if (!/^https?:\/\//i.test(v)) {
+      v = (isLocal(v) ? "http://" : "https://") + v;
+    }
     return v;
   }
 
   function show(url) {
     if (!url) return;
-    if (/^http:\/\//i.test(url)) {
-      $msg.textContent = "Office add-ins can only show https:// pages. Use the https version of this address.";
+    if (/^http:\/\//i.test(url) && !isLocal(url)) {
+      $msg.textContent = "Office add-ins can only show https:// pages, or http://localhost pages on this computer. Use the https version of this address.";
       $msg.classList.remove("hidden");
       $frame.hidden = true;
       return;
