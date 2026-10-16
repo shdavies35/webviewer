@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slide Web Viewer</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; background: #fff; color: #222; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #bar { display: flex; gap: 6px; padding: 6px; background: #f1f1f1; border-bottom: 1px solid #ccc; }
+  #bar input { flex: 1; padding: 6px 8px; border: 1px solid #999; border-radius: 3px; min-width: 0; }
+  #bar button { padding: 6px 12px; border: 1px solid #2b579a; background: #2b579a; color: #fff; border-radius: 3px; cursor: pointer; }
+  #bar button:focus-visible, #bar input:focus-visible { outline: 2px solid #ffb900; outline-offset: 1px; }
+  #bar.hidden { display: none; }
+  #frame { flex: 1; border: 0; width: 100%; }
+  #msg { padding: 24px; color: #555; line-height: 1.5; }
+  #msg.hidden { display: none; }
+  #warn { display: none; padding: 6px 8px; background: #fff4ce; border-bottom: 1px solid #e0c36a; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <input id="url" type="url" placeholder="https://example.com" aria-label="Web page address">
+    <button id="go">Load</button>
+  </div>
+  <div id="warn">If the page stays blank, the site probably blocks embedding (X-Frame-Options / CSP frame-ancestors). Try a different page or one you control.</div>
+  <div id="msg">Enter a web address above and select Load. The page is saved with the presentation.</div>
+  <iframe id="frame" hidden
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+          allow="fullscreen; autoplay; clipboard-write"
+          referrerpolicy="no-referrer-when-downgrade"
+          title="Embedded web page"></iframe>
+</div>
+
+<script>
+(function () {
+  var KEY = "webviewer.url";
+  var $url = document.getElementById("url");
+  var $go = document.getElementById("go");
+  var $frame = document.getElementById("frame");
+  var $msg = document.getElementById("msg");
+  var $bar = document.getElementById("bar");
+  var $warn = document.getElementById("warn");
+  var settings = null;
+  var warnTimer = null;
+
+  function normalise(v) {
+    v = (v || "").trim();
+    if (!v) return "";
+    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+    return v;
+  }
+
+  function show(url) {
+    if (!url) return;
+    if (/^http:\/\//i.test(url)) {
+      $msg.textContent = "Office add-ins can only show https:// pages. Use the https version of this address.";
+      $msg.classList.remove("hidden");
+      $frame.hidden = true;
+      return;
+    }
+    $msg.classList.add("hidden");
+    $frame.hidden = false;
+    $frame.src = url;
+    // Gentle hint if nothing appears (embedding blocks can't be detected directly).
+    clearTimeout(warnTimer);
+    $warn.style.display = "none";
+    warnTimer = setTimeout(function () { if ($bar && !$bar.classList.contains("hidden")) $warn.style.display = "block"; }, 6000);
+  }
+
+  $frame.addEventListener("load", function () { /* may fire even for blocked pages; the hint stays in edit mode only */ });
+
+  function load() {
+    var url = normalise($url.value);
+    if (!url) return;
+    $url.value = url;
+    show(url);
+    if (settings) {
+      settings.set(KEY, url);
+      settings.saveAsync(function () {});
+    }
+  }
+
+  $go.addEventListener("click", load);
+  $url.addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
+
+  function applyView(view) {
+    // "edit" while authoring, "read" during slide show / reading view.
+    var playing = (view === "read");
+    $bar.classList.toggle("hidden", playing);
+    if (playing) $warn.style.display = "none";
+  }
+
+  Office.onReady(function () {
+    settings = Office.context.document.settings;
+    var saved = settings.get(KEY);
+    if (saved) { $url.value = saved; show(saved); }
+
+    if (Office.context.document.getActiveViewAsync) {
+      Office.context.document.getActiveViewAsync(function (r) {
+        if (r.status === Office.AsyncResultStatus.Succeeded) applyView(r.value);
+      });
+      Office.context.document.addHandlerAsync(Office.EventType.ActiveViewChanged, function (e) {
+        applyView(e.activeView);
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>
